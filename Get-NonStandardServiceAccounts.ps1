@@ -1,17 +1,37 @@
 <#
 .SYNOPSIS
-Written by JBear 2/22/2017
-Check requested servers for Services that are running with Service Account credentials (Any Non-Standard Accounts) and report findings.
+Written by JBear
 
 .DESCRIPTION
-Check requested servers for Services that are running with Service Account credentials (Any Non-Standard Accounts) and report findings.
+Before use -- set the following values to your own environment information:
+Line 60, 66, 72, 78, 86
 
-.NOTES 
-This version was specified for a particular domain. Changes may be made to fit your own domain/OU's or to parameterize all OU/File inputs.
+This script/function is designed to retrieve all windows services being run by any service accounts (not including standard defaults - see lines 142-148 to adjust). This is to assist SysAdmins in finding all service accounts currently in operation during password change timeframes.
+All switches ( currently -S -K -W -H ) may be linked to their respective OU.
+
+When server or workstation hostnames are supplied to the pipeline, the search will only apply to those values (multiple values supported in pipeline; must separate by comma).
+When switches are applied, the search will only apply to those specifically.
+If no switches are applied, the search will DEFAULT to the parent OU you have set on line 83.
+
+.EXAMPLE
+.\Get-NonStandardSeviceAccounts.ps1 -S -K -ConvertToHTML
+
+.EXAMPLE
+.\Get-NonStandardSeviceAccounts.ps1
+
+.EXAMPLE
+.\Get-NonStandardSeviceAccounts.ps1 SuperSecretServer01.acme.com
+
+.EXAMPLE
+.\Get-NonStandardSeviceAccounts.ps1 192.168.93.12
+
+.EXAMPLE
+.\Get-NonStandardSeviceAccounts.ps1 SuperSecretServer01, NotSoSecretServer01.acme.com, 192.168.93.12
 #>
 
 Param(
-
+[parameter(ValueFromPipeline=$true)]
+    [String[]]$Names,
     [Switch]$S,
     [Switch]$K,
     [Switch]$W,
@@ -26,12 +46,12 @@ Try {
 
 Catch {
 
-    Write-Host -ForegroundColor Yellow "`nUnable to load Active Directory Module; this is required to run this script. Please, install RSAT and configure this server properly."
+    Write-Host -ForegroundColor Yellow "`nUnable to load Active Directory Module; it is required to run this script. Please, install RSAT and configure this server properly."
     Break
 }
 
-#Empty Array
-$SearchOU = @()
+#Format today's date
+$LogDate = (Get-Date -format yyyyMMdd)
 
 #S server OU switch
 if($S) {
@@ -57,30 +77,44 @@ if($H) {
     $SearchOU += "OU=H,OU=Computers,DC=acme,DC=com"
 }
 
-#If no OU switches are present, use parent OU for array
+#If no OU switches are present, use parent 05_Servers OU for array
 if(!($S.IsPresent -or $K.IsPresent -or $W.IsPresent -or $H.IsPresent)){
-
-    #Set $SearchOU to parent server OU
-    $SearchOU = "OU=Computers,DC=acme,DC=com"
+    
+    if([string]::IsNullOrWhiteSpace($Names)) { 
+        #Set $SearchOU to parent server OU
+        $SearchOU = "OU=Computers,DC=acme,DC=coms"
+    }
 }
 
-Write-Host "`nRetrieving servers from the following OU's:"
+Write-Host "`nRetrieving server information from:"
 
-#Process each item in $SearchOU
-foreach($OU in $SearchOU) {
+if([String]::IsNullOrWhiteSpace($Names)) {
+    
+    #Process each item in $SearchOU
+    foreach($OU in $SearchOU) {
 
-    Write-Progress -Activity "Retrieving servers from selected OU..." -Status ("Percent Complete:" + "{0:N0}" -f ((($i++) / $SearchOU.count) * 100) + "%") -CurrentOperation "Processing $($OU)..." -PercentComplete ((($j++) / $SearchOU.count) * 100)
-    Write-Host "$OU"
+        Write-Progress -Activity "Retrieving information from selected servers..." -Status ("Percent Complete:" + "{0:N0}" -f ((($i++) / $SearchOU.count) * 100) + "%") -CurrentOperation "Processing $($OU)..." -PercentComplete ((($j++) / $SearchOU.count) * 100)
+    
+        #OU can't be $null or whitespace
+        if(!([string]::IsNullOrWhiteSpace($OU))) {
+    
+            #Retrieve all server names from $OU
+            $Names = (Get-ADComputer -SearchBase $OU -SearchScope Subtree -Filter *).Name
 
-    #OU can't be $null or whitespace
-    if(!([string]::IsNullOrWhiteSpace($OU))) {
-
-        #Retrieve all server names from $OU
-        $Names = (Get-ADComputer -SearchBase $OU -SearchScope Subtree -Filter *).Name
-
-        #Add server names to $ComputerList Array
-        $ComputerList += $Names
+            #Add server names to $ComputerList Array
+            $ComputerList += $Names
+        }
     }
+}
+
+else {
+
+    $ComputerList += $Names
+}
+
+foreach ($C in $ComputerList) {
+
+    Write-Host "$C"
 }
 
 $i=0
@@ -91,7 +125,7 @@ function Get-Accounts {
 
     #Process each item in $ComputerList
     foreach ($Computer in $ComputerList) {
-
+        
         #Progress bar/completion percentage of all items in $ComputerList
         Write-Progress -Activity "Creating job for $Computer to query Local Services..." -Status ("Percent Complete:" + "{0:N0}" -f ((($i++) / $ComputerList.count) * 100) + "%") -CurrentOperation "Processing $($Computer)..." -PercentComplete ((($j++) / $ComputerList.count) * 100)
 
@@ -101,7 +135,9 @@ function Get-Accounts {
             #Creat job to run parallel
             Start-Job -ScriptBlock { param($Computer)
 
-                #Query each computer
+                <# Query each computer
+                Note: Get-CIMInstance -ComputerName $Computer -ClassName Win32_Service -ErrorAction SilentlyContinue 
+                won't currently work with some out of date servers #>
                 $WMI = (Get-WmiObject -ComputerName $Computer -Class Win32_Service -ErrorAction SilentlyContinue | 
 
                 #Filter out the standard service accounts
@@ -112,15 +148,15 @@ function Get-Accounts {
                 Where-Object -FilterScript {$_.StartName -ne "NT AUTHORITY\Local Service"}   |
                 Where-Object -FilterScript {$_.StartName -ne "NT AUTHORITY\Network Service"} |
                 Where-Object -FilterScript {$_.StartName -ne "NT AUTHORITY\system"})
-
+                
                 if($WMI.count -eq 0) {
-
+                
                     [pscustomobject] @{
 
-                        StartName    = "N/A"
+                        StartName    = "No Service Accounts Found "
                         Name         = "N/A"
                         DisplayName  = "N/A"
-                        StartMode    = "No Service Accounts Found On"
+                        StartMode    = "N/A"
                         SystemName   = $Computer
                     }  
                 }
@@ -128,7 +164,7 @@ function Get-Accounts {
                 else {
 
                     foreach($Obj in $WMI) {
-
+                        
                         [pscustomobject] @{
 
                             StartName    = $Obj.StartName
@@ -143,15 +179,15 @@ function Get-Accounts {
         }
 
         else {
-
+        
             Start-Job -ScriptBlock { param($Computer)
 
                 [pscustomobject] @{
 
-                    StartName    = "N/A"
+                    StartName    = "Unable to Ping"
                     Name         = "N/A"
                     DisplayName  = "N/A"
-                    StartMode    = "Unable to Ping"
+                    StartMode    = "N/A"
                     SystemName   = $Computer
                 }
             } -ArgumentList $Computer
@@ -164,12 +200,12 @@ Write-Host "`nAll jobs have been created on reachable machines... Please wait...
 
 #Convert to HTML output switch
 switch($ConvertToHTML.IsPresent) {
-
+    
     #If -ConvertToHTML is present
     $true {
-
+    
         #Set location for the report to executing users' My Documents folder
-        $Report = [environment]::getfolderpath("mydocuments") + "\Service_Account-Audit_Report.html"
+        $Report = [environment]::getfolderpath("mydocuments") + "\Service_Account-Audit_Report-" + $logdate + ".html"
 
         #Set HTML formatting
         $HTML =
@@ -184,7 +220,7 @@ TD{border-width: 1px;padding: 2px;border-style: solid;border-color: black;backgr
 "@
 
         #Converts the output to HTML format and writes it to a file
-        Get-Accounts | Wait-Job | Receive-Job | Select StartName, Name, DisplayName, StartMode, SystemName | ConvertTo-Html -Property StartName, Name, DisplayName, StartMode, SystemName -Head $HTML -Body "<H2>Non-Standard Service Accounts on $Computer</H2>"| Out-File $Report -Force
+        Get-Accounts | Wait-Job | Receive-Job | Select StartName, Name, DisplayName, StartMode, SystemName | ConvertTo-Html -Property StartName, Name, DisplayName, StartMode, SystemName -Head $HTML -Body "<H2>Services Executed by Non-Standard Service Accounts $Computer</H2>"| Out-File $Report -Force
         Write-Output "`nHTML Report has been saved to $Report for future viewing."
 }
 
@@ -192,7 +228,7 @@ TD{border-width: 1px;padding: 2px;border-style: solid;border-color: black;backgr
     default {
 
         #Set location for the report to executing users' My Documents folder
-        $Report = [environment]::getfolderpath("mydocuments") + "\Service_Account-Audit_Report.csv"
+        $Report = [environment]::getfolderpath("mydocuments") + "\Service_Account-Audit_Report-" + $logdate + ".csv"
 
         #Converts the output to CSV format and writes it to a file
         Get-Accounts | Wait-Job | Receive-Job | Select StartName, Name, DisplayName, StartMode, SystemName | Export-Csv $Report -NoTypeInformation -Force
