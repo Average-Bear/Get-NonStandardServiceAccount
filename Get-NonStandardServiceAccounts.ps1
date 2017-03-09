@@ -4,7 +4,7 @@ Written by JBear
 
 .DESCRIPTION
 Before use -- set the following values to your own environment information:
-Line 60, 66, 72, 78, 86
+Line 59, 65, 71, 77, 85
 
 This script/function is designed to retrieve all windows services being run by any service accounts (not including standard defaults - see lines 142-148 to adjust). This is to assist SysAdmins in finding all service accounts currently in operation during password change timeframes.
 All switches ( currently -S -K -W -H ) may be linked to their respective OU.
