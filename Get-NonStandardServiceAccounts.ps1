@@ -11,7 +11,7 @@ All switches ( currently -S -K -W -H ) may be linked to their respective OU.
 
 When server or workstation hostnames are supplied to the pipeline, the search will only apply to those values (multiple values supported in pipeline; must separate by comma).
 When switches are applied, the search will only apply to those specifically.
-If no switches are applied, the search will DEFAULT to the parent OU you have set on line 83.
+If no switches are applied, the search will DEFAULT to the parent OU (Line 85).
 
 .EXAMPLE
 .\Get-NonStandardSeviceAccounts.ps1 -S -K -ConvertToHTML
