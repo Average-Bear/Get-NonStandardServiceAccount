@@ -1,32 +1,37 @@
 <#
 .SYNOPSIS
-Written by JBear
+    Retrieve all Non-Standard (Local) Service accounts from remote server(s). 
+    Can add/remove filters for more or less inclusion.
 
 .DESCRIPTION
-Before use -- set the following values to your own environment information:
-Line 59, 65, 71, 77, 85
+    Retrieve all Non-Standard (Local) Service accounts from remote server(s).
+    Can add/remove filters for more or less inclusion.
+.NOTES
+    Written by: JBear
+    
+    Before use -- set the following values to your own environment information: Line 59, 65, 71, 77, 85
+    
+    This script/function is designed to retrieve all windows services being run by any service accounts (not including standard defaults - see lines 142-148 to adjust). This is to assist SysAdmins in finding all service accounts currently in operation during password change timeframes.
+    All switches ( currently -S -K -W -H ) may be linked to their respective OU.
 
-This script/function is designed to retrieve all windows services being run by any service accounts (not including standard defaults - see lines 142-148 to adjust). This is to assist SysAdmins in finding all service accounts currently in operation during password change timeframes.
-All switches ( currently -S -K -W -H ) may be linked to their respective OU.
-
-When server or workstation hostnames are supplied to the pipeline, the search will only apply to those values (multiple values supported in pipeline; must separate by comma).
-When switches are applied, the search will only apply to those specifically.
-If no switches are applied, the search will DEFAULT to the parent OU (Line 85).
-
-.EXAMPLE
-.\Get-NonStandardSeviceAccounts.ps1 -S -K -ConvertToHTML
-
-.EXAMPLE
-.\Get-NonStandardSeviceAccounts.ps1
+    When server or workstation hostnames are supplied to the pipeline, the search will only apply to those values (multiple values supported in pipeline; must separate by comma).
+    When switches are applied, the search will only apply to those specifically.
+    If no switches are applied, the search will DEFAULT to the parent OU (Line 85).
 
 .EXAMPLE
-.\Get-NonStandardSeviceAccounts.ps1 SuperSecretServer01.acme.com
+    .\Get-NonStandardSeviceAccounts.ps1 -S -K -ConvertToHTML
 
 .EXAMPLE
-.\Get-NonStandardSeviceAccounts.ps1 192.168.93.12
+    .\Get-NonStandardSeviceAccounts.ps1
 
 .EXAMPLE
-.\Get-NonStandardSeviceAccounts.ps1 SuperSecretServer01, NotSoSecretServer01.acme.com, 192.168.93.12
+    .\Get-NonStandardSeviceAccounts.ps1 SuperSecretServer01.acme.com
+
+.EXAMPLE
+    .\Get-NonStandardSeviceAccounts.ps1 192.168.93.12
+
+.EXAMPLE
+    .\Get-NonStandardSeviceAccounts.ps1 SuperSecretServer01, NotSoSecretServer01.acme.com, 192.168.93.12
 #>
 
 Param(
